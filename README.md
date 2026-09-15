@@ -20,8 +20,8 @@ only using hotkeys:
 2. Launch the `.exe` file. Now the program icon should be visible on system
    tray!
 
-3. Click on the icon and mark as "Run on startup" to make sure you don't have
-   to run it every time you reboot your PC.
+3. Optionally enable **Start on login** in the tray menu or **Settings...** to
+   launch RectangleWin automatically when you sign in.
 
 ## Keyboard Bindings
 
@@ -48,14 +48,26 @@ corners. Win distinguishes corners because Ctrl and Shift are already in Super.
 ## Configuration
 
 RectangleWin creates `%AppData%\RectangleWin\config.json` on first launch. Choose
-**Open configuration** from the tray menu to edit it in Notepad, then **quit and
-restart RectangleWin** to apply changes. The path is independent of the executable
-location and working directory, including when launched at startup.
+**Settings...** from the tray menu for an optional native settings pop-up. Edit
+Super modifiers, action keys, and additional modifiers; separate modifiers with
+commas. **Save** validates shortcuts before writing; **Cancel** discards edits.
+The window only appears when requested, never automatically at startup.
+
+**Start on login** is optional and applies immediately when saved. It uses the
+current user's Windows Run registry entry (no administrator access required),
+not a second value in JSON. The tray checkbox controls the same setting.
+Keep the executable at a stable location; re-enable this option if you move it.
+
+**Open configuration** remains available for editing JSON directly in Notepad.
+**Quit and restart RectangleWin** to apply shortcut changes from either editor.
+The configuration path is independent of the executable location and working
+directory, including when launched at login.
 
 Repository defaults live in [`config/defaults.json`](config/defaults.json) and are
 embedded in the executable; no separate defaults file needs to be distributed.
 The user file overrides those defaults. Omitted fields inherit defaults, objects
-merge, and arrays replace defaults. Existing files are never overwritten. Invalid
+merge, and arrays replace defaults. Loading never overwrites existing files;
+explicitly saving in Settings writes the complete validated configuration. Invalid
 settings produce an error dialog with the file path and prevent startup.
 
 For example, this keeps the requested Super combination and changes Center to Z:
@@ -98,7 +110,9 @@ held-key tracking to recover from releases missed on the lock screen.
 - `keyboard/`: platform-independent shortcut matching and key-state handling.
 - `hotkey.go`: Windows hook on a dedicated message-pump thread, with a separate
   serialized action executor so resizing and tray menus cannot block the hook.
-- `tray.go`: exposes the resolved configuration path for editing.
+- `tray.go`: exposes Settings, JSON editing, and the start-on-login toggle.
+- `settings_windows.go`: on-demand native settings window with its own message pump.
+- `autorun.go`: per-user Windows login registration; independent of shortcut JSON.
 
 To add a setting, extend `config.Config` (or a nested settings type), add its default
 in `config/defaults.json`, add validation/tests, and pass it to the consuming component.
@@ -136,6 +150,10 @@ go vet ./config ./keyboard
 
 Test actual keyboard input on Windows, including wrong modifier sides, key repeats,
 modifier-first releases, the tray menu, and switching away to the lock screen and back.
+On Windows, also test Settings Save/Cancel, invalid/conflicting shortcuts, reopening
+and keyboard navigation, and synchronization with the tray login toggle. Verify
+login launch with the executable in a path containing spaces and no launch after
+disabling it. Native UI and registry integration require a Windows smoke test.
 
 ## License
 

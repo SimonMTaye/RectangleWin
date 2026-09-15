@@ -41,6 +41,7 @@ func onReady(configPath string) {
 		panic(err)
 	}
 
+	mSettings := systray.AddMenuItem("Settings...", "Configure keyboard shortcuts and start on login")
 	mConfig := systray.AddMenuItem("Open configuration", "Restart RectangleWin after editing settings")
 	go func() {
 		for range mConfig.ClickedCh {
@@ -61,27 +62,34 @@ func onReady(configPath string) {
 
 	systray.AddSeparator()
 
-	mAutoRun := systray.AddMenuItemCheckbox("Run on startup", "", autorun)
+	mAutoRun := systray.AddMenuItemCheckbox("Start on login", "", autorun)
+	updateAutoRun := func(enabled bool) {
+		if enabled {
+			mAutoRun.Check()
+		} else {
+			mAutoRun.Uncheck()
+		}
+	}
+	go func() {
+		for range mSettings.ClickedCh {
+			showSettings(configPath, updateAutoRun)
+		}
+	}()
 	go func() {
 		for range mAutoRun.ClickedCh {
-			if mAutoRun.Checked() {
-				if err := AutoRunDisable(); err != nil {
-					mAutoRun.SetTitle(err.Error())
-					fmt.Printf("warn: autorun disable: %v\n", err)
-					continue
+			func() {
+				autoRunSettingsMu.Lock()
+				defer autoRunSettingsMu.Unlock()
+				enabled, err := AutoRunEnabled()
+				if err == nil {
+					err = settingsSetAutoRun(!enabled)
 				}
-				fmt.Println("disabled autorun")
-				mAutoRun.Uncheck()
-			} else {
-				if err := AutoRunEnable(); err != nil {
-					mAutoRun.SetTitle(err.Error())
-					fmt.Printf("warn: autorun enable: %v\n", err)
-					continue
+				if err != nil {
+					showMessageBox(fmt.Sprintf("Could not change start on login: %v", err))
+					return
 				}
-				fmt.Println("enabled autorun")
-				mAutoRun.Check()
-			}
-
+				updateAutoRun(!enabled)
+			}()
 		}
 	}()
 

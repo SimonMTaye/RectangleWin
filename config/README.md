@@ -12,6 +12,9 @@ are checked in as `defaults.json` and embedded in the binary.
 - `LoadFile(path string) (Config, error)` loads an explicit path. Both loaders create
   missing parents and initialize missing files with the exact embedded defaults.
   Existing files, including invalid ones, are never rewritten.
+- `SaveFile(path string, c Config) error` validates and explicitly replaces a file
+  using a temporary file in the same directory. Validation/write failures preserve
+  the old file; the parent directory must exist. Saves expand inherited defaults.
 - `Defaults() Config` returns an independent, mutable copy of the defaults.
 - `(Config).Validate() error` validates a complete configuration, including all eleven
   supported actions. Loaders call this automatically and include the file path in
