@@ -27,11 +27,11 @@ var icon []byte
 
 const repo = "https://github.com/ahmetb/RectangleWin"
 
-func initTray() {
-	systray.Register(onReady, onExit)
+func initTray(configPath string) {
+	systray.Register(func() { onReady(configPath) }, onExit)
 }
 
-func onReady() {
+func onReady(configPath string) {
 	systray.SetIcon(icon)
 	systray.SetTitle("RectangleWin")
 	systray.SetTooltip("RectangleWin")
@@ -40,6 +40,15 @@ func onReady() {
 	if err != nil {
 		panic(err)
 	}
+
+	mConfig := systray.AddMenuItem("Open configuration", "Restart RectangleWin after editing settings")
+	go func() {
+		for range mConfig.ClickedCh {
+			if err := w32.ShellExecute(0, "open", "notepad.exe", "\""+configPath+"\"", "", w32.SW_SHOWNORMAL); err != nil {
+				showMessageBox(fmt.Sprintf("Could not open configuration %q: %v", configPath, err))
+			}
+		}
+	}()
 
 	mRepo := systray.AddMenuItem("Documentation", "")
 	go func() {

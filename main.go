@@ -28,6 +28,7 @@ import (
 	"github.com/getlantern/systray"
 	"github.com/gonutz/w32/v2"
 
+	"github.com/ahmetb/RectangleWin/config"
 	"github.com/ahmetb/RectangleWin/w32ex"
 )
 
@@ -35,6 +36,12 @@ var lastResized w32.HWND
 
 func main() {
 	runtime.LockOSThread() // since we bind hotkeys etc that need to dispatch their message here
+	cfg, configPath, err := config.Load()
+	if err != nil {
+		showMessageBox(err.Error())
+		return
+	}
+	fmt.Printf("configuration: %s\n", configPath)
 	if !w32ex.SetProcessDPIAware() {
 		panic("failed to set DPI aware")
 	}
@@ -59,8 +66,7 @@ func main() {
 		{bottomRightHalf, bottomRightTwoThirds, bottomRightOneThirds}}
 	cornerFuncTurn := make([]int, len(cornerFuncs))
 
-	cycleFuncs := func(funcs [][]resizeFunc, turns *[]int, i int) {
-		hwnd := w32.GetForegroundWindow()
+	cycleFuncs := func(hwnd w32.HWND, funcs [][]resizeFunc, turns *[]int, i int) {
 		if hwnd == 0 {
 			panic("foreground window is NULL")
 		}
@@ -79,56 +85,47 @@ func main() {
 		}
 	}
 
-	cycleEdgeFuncs := func(i int) { cycleFuncs(edgeFuncs, &edgeFuncTurn, i) }
-	cycleCornerFuncs := func(i int) { cycleFuncs(cornerFuncs, &cornerFuncTurn, i) }
+	cycleEdgeFuncs := func(hwnd w32.HWND, i int) { cycleFuncs(hwnd, edgeFuncs, &edgeFuncTurn, i) }
+	cycleCornerFuncs := func(hwnd w32.HWND, i int) { cycleFuncs(hwnd, cornerFuncs, &cornerFuncTurn, i) }
 
-	hks := []HotKey{
-		(HotKey{id: 1, mod: MOD_ALT | MOD_WIN | MOD_NOREPEAT, vk: w32.VK_LEFT, callback: func() { cycleEdgeFuncs(0) }}),
-		(HotKey{id: 2, mod: MOD_ALT | MOD_WIN | MOD_NOREPEAT, vk: w32.VK_RIGHT, callback: func() { cycleEdgeFuncs(1) }}),
-		(HotKey{id: 3, mod: MOD_ALT | MOD_WIN | MOD_NOREPEAT, vk: w32.VK_UP, callback: func() { cycleEdgeFuncs(2) }}),
-		(HotKey{id: 4, mod: MOD_ALT | MOD_WIN | MOD_NOREPEAT, vk: w32.VK_DOWN, callback: func() { cycleEdgeFuncs(3) }}),
-		(HotKey{id: 5, mod: MOD_CONTROL | MOD_ALT | MOD_WIN | MOD_NOREPEAT, vk: w32.VK_LEFT, callback: func() { cycleCornerFuncs(0) }}),
-		(HotKey{id: 6, mod: MOD_CONTROL | MOD_ALT | MOD_WIN | MOD_NOREPEAT, vk: w32.VK_UP, callback: func() { cycleCornerFuncs(1) }}),
-		(HotKey{id: 7, mod: MOD_CONTROL | MOD_ALT | MOD_WIN | MOD_NOREPEAT, vk: w32.VK_DOWN, callback: func() { cycleCornerFuncs(2) }}),
-		(HotKey{id: 8, mod: MOD_CONTROL | MOD_ALT | MOD_WIN | MOD_NOREPEAT, vk: w32.VK_RIGHT, callback: func() { cycleCornerFuncs(3) }}),
-		(HotKey{id: 50, mod: MOD_SHIFT | MOD_WIN, vk: 0x46 /*F*/, callback: func() {
+	actions := map[string]func(w32.HWND){
+		"edge_left":           func(hwnd w32.HWND) { cycleEdgeFuncs(hwnd, 0) },
+		"edge_right":          func(hwnd w32.HWND) { cycleEdgeFuncs(hwnd, 1) },
+		"edge_top":            func(hwnd w32.HWND) { cycleEdgeFuncs(hwnd, 2) },
+		"edge_bottom":         func(hwnd w32.HWND) { cycleEdgeFuncs(hwnd, 3) },
+		"corner_top_left":     func(hwnd w32.HWND) { cycleCornerFuncs(hwnd, 0) },
+		"corner_top_right":    func(hwnd w32.HWND) { cycleCornerFuncs(hwnd, 1) },
+		"corner_bottom_left":  func(hwnd w32.HWND) { cycleCornerFuncs(hwnd, 2) },
+		"corner_bottom_right": func(hwnd w32.HWND) { cycleCornerFuncs(hwnd, 3) },
+		"maximize": func(hwnd w32.HWND) {
 			lastResized = 0 // cause edgeFuncTurn to be reset
-			if err := maximize(); err != nil {
+			if err := maximize(hwnd); err != nil {
 				fmt.Printf("warn: maximize: %v\n", err)
 				return
 			}
-		}}),
-		(HotKey{id: 60, mod: MOD_ALT | MOD_WIN, vk: 0x43 /*C*/, callback: func() {
+		},
+		"center": func(hwnd w32.HWND) {
 			lastResized = 0 // cause edgeFuncTurn to be reset
-			if _, err := resize(w32.GetForegroundWindow(), center); err != nil {
+			if _, err := resize(hwnd, center); err != nil {
 				fmt.Printf("warn: resize: %v\n", err)
 				return
 			}
-		}}),
-		(HotKey{id: 70, mod: MOD_ALT | MOD_WIN, vk: 0x41 /*A*/, callback: func() {
-			hwnd := w32.GetForegroundWindow()
+		},
+		"always_on_top": func(hwnd w32.HWND) {
 			if err := toggleAlwaysOnTop(hwnd); err != nil {
 				fmt.Printf("warn: toggleAlwaysOnTop: %v\n", err)
 				return
 			}
 			fmt.Printf("> toggled always on top: %v\n", hwnd)
-		}}),
+		},
 	}
 
-	var failedHotKeys []HotKey
-	for _, hk := range hks {
-		if !RegisterHotKey(hk) {
-			failedHotKeys = append(failedHotKeys, hk)
-		}
+	stopKeyboardHook, err := installKeyboardHook(cfg.Keyboard, actions)
+	if err != nil {
+		showMessageBox(err.Error())
+		return
 	}
-	if len(failedHotKeys) > 0 {
-		msg := "The following hotkey(s) are in use by another process:\n\n"
-		for _, hk := range failedHotKeys {
-			msg += "  - " + hk.Describe() + "\n"
-		}
-		msg += "\nTo use these hotkeys in RectangleWin, close the other process using the key combination(s)."
-		showMessageBox(msg)
-	}
+	defer stopKeyboardHook()
 
 	exitCh := make(chan os.Signal)
 	signal.Notify(exitCh, os.Interrupt)
@@ -142,7 +139,7 @@ func main() {
 	// however it's not clear if GetMessage(0,0) will continue to work
 	// as we run "go initTray()" and not pin the thread that initializes the
 	// tray.
-	initTray()
+	initTray(configPath)
 	if err := msgLoop(); err != nil {
 		panic(err)
 	}
@@ -225,8 +222,7 @@ func resize(hwnd w32.HWND, f resizeFunc) (bool, error) {
 	return true, nil
 }
 
-func maximize() error {
-	hwnd := w32.GetForegroundWindow()
+func maximize(hwnd w32.HWND) error {
 	if !isZonableWindow(hwnd) {
 		return errors.New("foreground window is not zonable")
 	}
