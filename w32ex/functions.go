@@ -29,11 +29,6 @@ const (
 
 var user32 = syscall.NewLazyDLL("user32.dll")
 
-func RegisterHotKey(hwnd w32.HWND, id, mod, vk int) bool {
-	r1, _, _ := user32.NewProc("RegisterHotKey").Call(uintptr(hwnd), uintptr(id), uintptr(mod), uintptr(vk))
-	return r1 != 0
-}
-
 func GetDpiForWindow(hwnd w32.HWND) int32 {
 	r1, _, _ := user32.NewProc("GetDpiForWindow").Call(uintptr(hwnd))
 	return int32(r1)
