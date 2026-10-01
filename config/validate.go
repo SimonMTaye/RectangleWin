@@ -11,6 +11,14 @@ import (
 // Chords match exact modifier states: left and right variants are distinct, while
 // a generic modifier accepts either or both sides. Requiring both sides is valid.
 func (c Config) Validate() error {
+	switch c.Todo.Side {
+	case "left", "right", "top", "bottom":
+	default:
+		return fmt.Errorf("todo.side: must be left, right, top, or bottom")
+	}
+	if !(c.Todo.Fraction > 0 && c.Todo.Fraction < 1) {
+		return fmt.Errorf("todo.fraction: must be greater than 0 and less than 1")
+	}
 	if len(c.Keyboard.Super) == 0 {
 		return fmt.Errorf("keyboard.super: at least one modifier is required")
 	}

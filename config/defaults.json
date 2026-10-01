@@ -1,4 +1,5 @@
 {
+  "todo": {"side": "left", "fraction": 0.25},
   "keyboard": {
     "super": ["left_ctrl", "left_alt", "right_shift"],
     "bindings": {
@@ -6,13 +7,21 @@
       "edge_right": {"key": "Right", "modifiers": []},
       "edge_top": {"key": "Up", "modifiers": []},
       "edge_bottom": {"key": "Down", "modifiers": []},
+      "third_left": {"key": "1", "modifiers": []},
+      "third_middle_width": {"key": "2", "modifiers": []},
+      "third_right": {"key": "3", "modifiers": []},
+      "third_top": {"key": "1", "modifiers": ["win"]},
+      "third_middle_height": {"key": "2", "modifiers": ["win"]},
+      "third_bottom": {"key": "3", "modifiers": ["win"]},
       "corner_top_left": {"key": "Left", "modifiers": ["win"]},
       "corner_top_right": {"key": "Up", "modifiers": ["win"]},
       "corner_bottom_left": {"key": "Down", "modifiers": ["win"]},
       "corner_bottom_right": {"key": "Right", "modifiers": ["win"]},
       "maximize": {"key": "F", "modifiers": []},
+      "maximize_space": {"key": "Space", "modifiers": []},
       "center": {"key": "C", "modifiers": []},
-      "always_on_top": {"key": "A", "modifiers": []}
+      "always_on_top": {"key": "A", "modifiers": []},
+      "todo": {"key": "T", "modifiers": []}
     }
   }
 }

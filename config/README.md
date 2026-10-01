@@ -16,12 +16,14 @@ are checked in as `defaults.json` and embedded in the binary.
   using a temporary file in the same directory. Validation/write failures preserve
   the old file; the parent directory must exist. Saves expand inherited defaults.
 - `Defaults() Config` returns an independent, mutable copy of the defaults.
-- `(Config).Validate() error` validates a complete configuration, including all eleven
+- `(Config).Validate() error` validates a complete configuration, including all nineteen
   supported actions. Loaders call this automatically and include the file path in
   errors.
 
-The public data types are `Config`, `Keyboard`, and `Binding`; their JSON fields are
-`keyboard`, `super`, `bindings`, `key`, and `modifiers`.
+The public data types are `Config`, `Keyboard`, `Binding`, and `Todo`.
+The top-level `todo` object defaults to `{"side":"left","fraction":0.25}`.
+Side accepts left, right, top, or bottom; fraction must be strictly between 0 and 1.
+The `todo` keyboard action defaults to Super + T.
 
 ## Overrides
 

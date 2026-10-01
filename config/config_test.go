@@ -13,6 +13,9 @@ import (
 
 func TestDefaults(t *testing.T) {
 	c := Defaults()
+	if c.Todo != (Todo{Side: "left", Fraction: .25}) {
+		t.Fatalf("unexpected TODO defaults: %+v", c.Todo)
+	}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -22,9 +25,13 @@ func TestDefaults(t *testing.T) {
 	want := map[string]Binding{
 		"edge_left": {"Left", []string{}}, "edge_right": {"Right", []string{}},
 		"edge_top": {"Up", []string{}}, "edge_bottom": {"Down", []string{}},
+		"third_left": {"1", []string{}}, "third_middle_width": {"2", []string{}}, "third_right": {"3", []string{}},
+		"third_top": {"1", []string{"win"}}, "third_middle_height": {"2", []string{"win"}}, "third_bottom": {"3", []string{"win"}},
 		"corner_top_left": {"Left", []string{"win"}}, "corner_top_right": {"Up", []string{"win"}},
 		"corner_bottom_left": {"Down", []string{"win"}}, "corner_bottom_right": {"Right", []string{"win"}},
-		"maximize": {"F", []string{}}, "center": {"C", []string{}}, "always_on_top": {"A", []string{}},
+		"maximize": {"F", []string{}}, "maximize_space": {"Space", []string{}},
+		"todo":   {"T", []string{}},
+		"center": {"C", []string{}}, "always_on_top": {"A", []string{}},
 	}
 	if !reflect.DeepEqual(c.Keyboard.Bindings, want) {
 		t.Fatalf("unexpected bindings: %v", c.Keyboard.Bindings)
@@ -34,6 +41,28 @@ func TestDefaults(t *testing.T) {
 	delete(c.Keyboard.Bindings, "center")
 	if !reflect.DeepEqual(Defaults().Keyboard.Bindings, want) || Defaults().Keyboard.Super[0] != "left_ctrl" {
 		t.Fatal("Defaults shares mutable state")
+	}
+}
+
+func TestTodoConfig(t *testing.T) {
+	for _, side := range []string{"left", "right", "top", "bottom"} {
+		c, err := loadText(t, `{"todo":{"side":"`+side+`"}}`)
+		if err != nil || c.Todo != (Todo{Side: side, Fraction: .25}) {
+			t.Fatalf("partial TODO config: %+v, %v", c.Todo, err)
+		}
+	}
+	c, err := loadText(t, `{"todo":{"fraction":0.4}}`)
+	if err != nil || c.Todo != (Todo{Side: "left", Fraction: .4}) {
+		t.Fatalf("fraction override: %+v, %v", c.Todo, err)
+	}
+	for _, input := range []string{
+		`{"todo":{"side":"middle"}}`, `{"todo":{"fraction":0}}`,
+		`{"todo":{"fraction":1}}`, `{"todo":{"fraction":-0.1}}`,
+		`{"todo":{"fraction":"quarter"}}`, `{"todo":null}`,
+	} {
+		if _, err := loadText(t, input); err == nil {
+			t.Errorf("accepted %s", input)
+		}
 	}
 }
 

@@ -71,8 +71,10 @@ func installKeyboardHook(cfg config.Keyboard, callbacks map[string]func(w32.HWND
 	if err := <-ready; err != nil {
 		return nil, err
 	}
+	executorDone := make(chan struct{})
 	go func() {
-		// Window operations include GetDC/ReleaseDC, which must share a thread.
+		defer close(executorDone)
+		// Keep serialized window operations on one OS thread.
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 		for action := range actions {
@@ -91,6 +93,7 @@ func installKeyboardHook(cfg config.Keyboard, callbacks map[string]func(w32.HWND
 		}
 		<-done
 		close(actions)
+		<-executorDone
 	}, nil
 }
 
