@@ -66,6 +66,26 @@ func bottomHalf(disp, _ w32.RECT) w32.RECT      { return toBottom(disp, 1, 2) }
 func bottomOneThirds(disp, _ w32.RECT) w32.RECT { return toBottom(disp, 1, 3) }
 func bottomTwoThirds(disp, _ w32.RECT) w32.RECT { return toBottom(disp, 2, 3) }
 
+// The middle zones use the inner boundaries of the outer thirds so all three
+// zones meet without gaps when a work area's dimensions are not divisible by 3.
+func middleWidthThird(disp, _ w32.RECT) w32.RECT {
+	return w32.RECT{
+		Left:   toLeft(disp, 1, 3).Right,
+		Top:    disp.Top,
+		Right:  toRight(disp, 1, 3).Left,
+		Bottom: disp.Bottom,
+	}
+}
+
+func middleHeightThird(disp, _ w32.RECT) w32.RECT {
+	return w32.RECT{
+		Left:   disp.Left,
+		Top:    toTop(disp, 1, 3).Bottom,
+		Right:  disp.Right,
+		Bottom: toBottom(disp, 1, 3).Top,
+	}
+}
+
 func topLeftHalf(disp, _ w32.RECT) w32.RECT      { return merge(toLeft(disp, 1, 2), toTop(disp, 1, 2)) }
 func topLeftTwoThirds(disp, _ w32.RECT) w32.RECT { return merge(toLeft(disp, 2, 3), toTop(disp, 1, 2)) }
 func topLeftOneThirds(disp, _ w32.RECT) w32.RECT { return merge(toLeft(disp, 1, 3), toTop(disp, 1, 2)) }

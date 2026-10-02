@@ -1,5 +1,11 @@
 # RectangleWin
 
+Fork of [RectangleWin](https://github.com/ahmetb/RectangleWin)
+
+- As per the author, I wanted rectangle-like keyboard bindings on Windows for snapping and navigating in general
+- This fork adds a few modifications to the original
+    - Configurable shortcuts
+
 A minimalistic Windows rewrite of macOS
 [Rectangle.app](https://rectangleapp.com)/[Spectacle.app](https://www.spectacleapp.com/).
 ([Why?](#why))
@@ -14,8 +20,8 @@ only using hotkeys:
 
 ## Install
 
-1. Go to [Releases](https://github.com/ahmetb/RectangleWin/releases) and
-   download the suitable binary for your architecture (typically x64).
+1. Clone repo and run build command described below.
+
 
 2. Launch the `.exe` file. Now the program icon should be visible on system
    tray!
@@ -33,19 +39,50 @@ prevent a match unless that binding requires them.
 | Action | Default shortcut |
 | --- | --- |
 | Snap left / right / top / bottom | Super + Left / Right / Up / Down |
+| Left / middle / right third (full height) | Super + 1 / 2 / 3 |
+| Top / middle / bottom third (full width) | Super + Win + 1 / 2 / 3 |
 | Snap top-left | Super + Win + Left |
 | Snap top-right | Super + Win + Up |
 | Snap bottom-left | Super + Win + Down |
 | Snap bottom-right | Super + Win + Right |
 | Center | Super + C |
-| Maximize | Super + F |
+| Maximize | Super + F / Space |
 | Toggle always on top | Super + A |
-
-Press an edge or corner shortcut repeatedly to cycle through ½, ⅔ and ⅓.
-Holding the action key does not repeat the action. Either Windows key works for
-corners. Win distinguishes corners because Ctrl and Shift are already in Super.
+| Toggle TODO mode for the current window | Super + T |
 
 ## Configuration
+
+### TODO mode
+
+Super + T pins the current window above other windows in the left quarter of its
+monitor's usable area. RectangleWin's maximize (including Super + Space), snaps,
+thirds, and center then use the remaining area on that monitor. Other monitors
+keep their full area. For example, on a 1920-pixel-wide work area, TODO takes 480
+pixels and each remaining third is 480 pixels wide, starting at x=480.
+
+Press Super + T on the TODO window again to release it and restore its previous
+placement and always-on-top state. Selecting another TODO window on the same
+monitor replaces the old one; separate monitors can each have one. RectangleWin
+layout shortcuts keep the TODO window in its reserved region, and Super + A keeps
+it on top until TODO mode is disabled. Closing it or moving it to another monitor
+releases its reservation on the next RectangleWin action. Minimizing it keeps the
+reservation. Quitting RectangleWin restores TODO windows; mode is not persisted.
+
+Add a top-level setting to your config to change the reserved side and amount:
+
+```json
+"todo": {"side": "left", "fraction": 0.25}
+```
+
+Sides are `left`, `right`, `top`, or `bottom`; fraction must be greater than 0
+and less than 1. Restart RectangleWin after changes. The shortcut is configurable
+under `keyboard.bindings.todo`. Existing configs inherit these defaults.
+
+The reservation applies to RectangleWin commands. Native Windows maximize,
+Win+Arrow, and manual dragging do not honor it. Windows with an application-enforced
+minimum size may not fit a small region.
+
+### Configuration file
 
 RectangleWin creates `%AppData%\RectangleWin\config.json` on first launch. Choose
 **Settings...** from the tray menu for an optional native settings pop-up. Edit
@@ -70,7 +107,8 @@ merge, and arrays replace defaults. Loading never overwrites existing files;
 explicitly saving in Settings writes the complete validated configuration. Invalid
 settings produce an error dialog with the file path and prevent startup.
 
-For example, this keeps the requested Super combination and changes Center to Z:
+
+An example configuration:
 
 ```json
 {
@@ -87,8 +125,10 @@ Each binding combines `keyboard.super`, its own extra `modifiers`, and its `key`
 Modifiers support `ctrl`, `alt`, `shift`, `win` (either side), or their `left_` and
 `right_` variants. Key names are case-sensitive: `A`–`Z`, `0`–`9`, `F1`–`F24`,
 `Left`, `Right`, `Up`, `Down`, `Space`, `Enter`, `Tab`, `Escape`, `Home`, `End`,
-`PageUp`, `PageDown`, `Insert`, `Delete`, `Backspace`. Unknown names, redundant
-modifiers, and overlapping shortcuts are rejected.
+`PageUp`, `PageDown`, `Insert`, `Delete`, `Backspace`.
+
+
+### Keyboard Shortcut Handling
 
 Shortcuts use a low-level keyboard hook to distinguish modifier sides. Only matched
 action keys are consumed; modifiers and unmatched keys pass through normally.
@@ -120,17 +160,12 @@ Existing partial configurations inherit newly introduced defaults.
 
 ## Why?
 
-It seems that no window snapping utility for Windows is capable of letting
-user snap windows to edges or corners in {half, two-thirds, one-third} sizes
-using configurable **shortcut keys**, and center windows in a screen like
-Rectangle.app does, so I wrote this small utility for myself.
-
-I've tried the native Windows shortcuts and PowerToys FancyZones and they
-are not supporting corners, alternating between half and one/two thirds, and
-are not offering enough hotkey support.
-
+I like Rectangle on macOS and want to make use of the muscle memory I have developed already. Fork was mainly to add configuration / rebinding
+of keys, particularly to allow `CapsLock` to be the leader key after rebinding `CapsLock` to `Left Ctrl + Left Alt + Right Shift`
 
 ## Development (Install from source)
+
+> **NOTE: My changes were made using Codex for my own use only. I will only edit this repo to fit my own needs; please clone and customize for yourself if necessary!**
 
 With Go 1.17+ installed, clone this repository and run:
 
@@ -144,8 +179,8 @@ The `RectangleWin.exe` will be available in the same directory.
 Platform-independent configuration and matching tests can run on any supported Go host:
 
 ```sh
-go test ./config ./keyboard
-go vet ./config ./keyboard
+go test ./config ./keyboard ./layout
+go vet ./config ./keyboard ./layout
 ```
 
 Test actual keyboard input on Windows, including wrong modifier sides, key repeats,

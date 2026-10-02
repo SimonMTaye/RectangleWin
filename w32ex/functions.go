@@ -57,7 +57,9 @@ func GetShellWindow() (hwnd w32.HWND) {
 	return w32.HWND(r1)
 }
 
-func SetProcessDPIAware() bool {
-	r1, _, _ := user32.NewProc("SetProcessDPIAware").Call()
-	return r1 != 0
+func SetProcessPerMonitorDPIAware() bool {
+	// PROCESS_PER_MONITOR_DPI_AWARE keeps window and monitor coordinates in
+	// physical pixels, matching DWM extended frame bounds on every monitor.
+	r1, _, _ := syscall.NewLazyDLL("shcore.dll").NewProc("SetProcessDpiAwareness").Call(2)
+	return r1 == 0 // S_OK
 }

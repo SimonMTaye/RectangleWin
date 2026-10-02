@@ -42,6 +42,7 @@ type settingsBindingControls struct {
 
 type settingsWindow struct {
 	path                 string
+	initialConfig        config.Config
 	onAutoRunChanged     func(bool)
 	hwnd, super, autorun w32.HWND
 	bindings             []settingsBindingControls
@@ -80,6 +81,7 @@ func (d *settingsWindow) run() {
 		d.error(fmt.Sprintf("Could not load settings:\n%v", err))
 		return
 	}
+	d.initialConfig = c
 	d.initialAutoRun, err = AutoRunEnabled()
 	if err != nil {
 		d.error(fmt.Sprintf("Could not read start-on-login status:\n%v", err))
@@ -293,10 +295,12 @@ func settingsSetAutoRun(enabled bool) error {
 func (d *settingsWindow) save() {
 	d.saving = true
 	defer func() { d.saving = false }()
-	c := config.Config{Keyboard: config.Keyboard{
+	// Preserve settings without controls in this dialog, including TODO layout.
+	c := d.initialConfig
+	c.Keyboard = config.Keyboard{
 		Super:    settingsModifiers(w32.GetWindowText(d.super)),
 		Bindings: make(map[string]config.Binding, len(d.bindings)),
-	}}
+	}
 	for _, controls := range d.bindings {
 		c.Keyboard.Bindings[controls.action] = config.Binding{
 			Key:       strings.TrimSpace(w32.GetWindowText(controls.key)),

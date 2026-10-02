@@ -10,6 +10,7 @@ import (
 func TestSaveFileRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	c := Defaults()
+	c.Todo = Todo{Side: "bottom", Fraction: .4}
 	c.Keyboard.Super = []string{"alt", "ctrl"}
 	c.Keyboard.Bindings["center"] = Binding{Key: "Z", Modifiers: []string{}}
 	if err := SaveFile(path, c); err != nil {

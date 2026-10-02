@@ -17,6 +17,13 @@ var defaultsJSON []byte
 // Config holds all application settings.
 type Config struct {
 	Keyboard Keyboard `json:"keyboard"`
+	Todo     Todo     `json:"todo"`
+}
+
+// Todo reserves a fraction of a monitor's usable area along one edge.
+type Todo struct {
+	Side     string  `json:"side"`
+	Fraction float64 `json:"fraction"`
 }
 
 // Keyboard defines the common modifiers and per-action shortcuts.

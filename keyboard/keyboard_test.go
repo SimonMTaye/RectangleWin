@@ -21,7 +21,9 @@ func event(t *testing.T, m *keyboard.Matcher, vk int, down bool, action string, 
 
 func newMatcher(t *testing.T, c config.Keyboard) *keyboard.Matcher {
 	t.Helper()
-	if err := (config.Config{Keyboard: c}).Validate(); err != nil {
+	cfg := config.Defaults()
+	cfg.Keyboard = c
+	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
 	}
 	return keyboard.New(c)
@@ -78,9 +80,13 @@ func TestDefaults(t *testing.T) {
 	}{
 		{"edge_left", 0x25, false}, {"edge_right", 0x27, false},
 		{"edge_top", 0x26, false}, {"edge_bottom", 0x28, false},
+		{"third_left", '1', false}, {"third_middle_width", '2', false}, {"third_right", '3', false},
+		{"third_top", '1', true}, {"third_middle_height", '2', true}, {"third_bottom", '3', true},
 		{"corner_top_left", 0x25, true}, {"corner_top_right", 0x26, true},
 		{"corner_bottom_left", 0x28, true}, {"corner_bottom_right", 0x27, true},
-		{"maximize", 'F', false}, {"center", 'C', false}, {"always_on_top", 'A', false},
+		{"maximize", 'F', false}, {"maximize_space", 0x20, false},
+		{"todo", 'T', false},
+		{"center", 'C', false}, {"always_on_top", 'A', false},
 	}
 	for _, tc := range cases {
 		for win := 0; win < 4; win++ {
@@ -94,9 +100,9 @@ func TestDefaults(t *testing.T) {
 				}
 				want := tc.action
 				if tc.corner && win == 0 {
-					want = map[int]string{0x25: "edge_left", 0x27: "edge_right", 0x26: "edge_top", 0x28: "edge_bottom"}[tc.vk]
+					want = map[int]string{0x25: "edge_left", 0x27: "edge_right", 0x26: "edge_top", 0x28: "edge_bottom", '1': "third_left", '2': "third_middle_width", '3': "third_right"}[tc.vk]
 				} else if !tc.corner && win != 0 {
-					want = map[int]string{0x25: "corner_top_left", 0x27: "corner_bottom_right", 0x26: "corner_top_right", 0x28: "corner_bottom_left"}[tc.vk]
+					want = map[int]string{0x25: "corner_top_left", 0x27: "corner_bottom_right", 0x26: "corner_top_right", 0x28: "corner_bottom_left", '1': "third_top", '2': "third_middle_height", '3': "third_bottom"}[tc.vk]
 				}
 				event(t, m, tc.vk, true, want, want != "")
 				event(t, m, tc.vk, true, "", want != "")

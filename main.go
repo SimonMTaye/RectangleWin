@@ -32,8 +32,6 @@ import (
 	"github.com/ahmetb/RectangleWin/w32ex"
 )
 
-var lastResized w32.HWND
-
 func main() {
 	runtime.LockOSThread() // since we bind hotkeys etc that need to dispatch their message here
 	cfg, configPath, err := config.Load()
@@ -42,8 +40,8 @@ func main() {
 		return
 	}
 	fmt.Printf("configuration: %s\n", configPath)
-	if !w32ex.SetProcessDPIAware() {
-		panic("failed to set DPI aware")
+	if !w32ex.SetProcessPerMonitorDPIAware() {
+		panic("failed to set per-monitor DPI awareness")
 	}
 
 	autorun, err := AutoRunEnabled()
@@ -52,64 +50,78 @@ func main() {
 	}
 	fmt.Printf("autorun enabled=%v\n", autorun)
 	printMonitors()
+	windows := &windowManager{settings: cfg.Todo, todos: make(map[w32.HMONITOR]*todoWindow)}
+	defer windows.clear()
+	resize := windows.resize
+	maximize := windows.maximize
+	toggleAlwaysOnTop := windows.toggleAlwaysOnTop
 
 	edgeFuncs := [][]resizeFunc{
 		{leftHalf, leftTwoThirds, leftOneThirds},
 		{rightHalf, rightTwoThirds, rightOneThirds},
 		{topHalf, topTwoThirds, topOneThirds},
 		{bottomHalf, bottomTwoThirds, bottomOneThirds}}
-	edgeFuncTurn := make([]int, len(edgeFuncs))
 	cornerFuncs := [][]resizeFunc{
 		{topLeftHalf, topLeftTwoThirds, topLeftOneThirds},
 		{topRightHalf, topRightTwoThirds, topRightOneThirds},
 		{bottomLeftHalf, bottomLeftTwoThirds, bottomLeftOneThirds},
 		{bottomRightHalf, bottomRightTwoThirds, bottomRightOneThirds}}
-	cornerFuncTurn := make([]int, len(cornerFuncs))
-
-	cycleFuncs := func(hwnd w32.HWND, funcs [][]resizeFunc, turns *[]int, i int) {
+	var lastCycleWindow w32.HWND
+	var lastCycleAction string
+	cycleTurn := 0
+	cycleFuncs := func(hwnd w32.HWND, action string, funcs []resizeFunc) {
 		if hwnd == 0 {
 			panic("foreground window is NULL")
 		}
-		if lastResized != hwnd {
-			*turns = make([]int, len(edgeFuncs)) // reset
+		if lastCycleWindow != hwnd || lastCycleAction != action {
+			cycleTurn = 0
 		}
-		if _, err := resize(hwnd, funcs[i][(*turns)[i]%len(funcs[i])]); err != nil {
+		if _, err := resize(hwnd, funcs[cycleTurn%len(funcs)]); err != nil {
 			fmt.Printf("warn: resize: %v\n", err)
 			return
 		}
-		(*turns)[i]++
-		for j := 0; j < len(*turns); j++ {
-			if j != i {
-				(*turns)[j] = 0
-			}
+		lastCycleWindow = hwnd
+		lastCycleAction = action
+		cycleTurn++
+	}
+	resizeDirect := func(hwnd w32.HWND, f resizeFunc) {
+		if _, err := resize(hwnd, f); err != nil {
+			fmt.Printf("warn: resize: %v\n", err)
+		}
+		lastCycleWindow = 0 // the next edge or corner shortcut starts at a half
+	}
+	maximizeDirect := func(hwnd w32.HWND) {
+		lastCycleWindow = 0
+		if err := maximize(hwnd); err != nil {
+			fmt.Printf("warn: maximize: %v\n", err)
 		}
 	}
 
-	cycleEdgeFuncs := func(hwnd w32.HWND, i int) { cycleFuncs(hwnd, edgeFuncs, &edgeFuncTurn, i) }
-	cycleCornerFuncs := func(hwnd w32.HWND, i int) { cycleFuncs(hwnd, cornerFuncs, &cornerFuncTurn, i) }
-
 	actions := map[string]func(w32.HWND){
-		"edge_left":           func(hwnd w32.HWND) { cycleEdgeFuncs(hwnd, 0) },
-		"edge_right":          func(hwnd w32.HWND) { cycleEdgeFuncs(hwnd, 1) },
-		"edge_top":            func(hwnd w32.HWND) { cycleEdgeFuncs(hwnd, 2) },
-		"edge_bottom":         func(hwnd w32.HWND) { cycleEdgeFuncs(hwnd, 3) },
-		"corner_top_left":     func(hwnd w32.HWND) { cycleCornerFuncs(hwnd, 0) },
-		"corner_top_right":    func(hwnd w32.HWND) { cycleCornerFuncs(hwnd, 1) },
-		"corner_bottom_left":  func(hwnd w32.HWND) { cycleCornerFuncs(hwnd, 2) },
-		"corner_bottom_right": func(hwnd w32.HWND) { cycleCornerFuncs(hwnd, 3) },
-		"maximize": func(hwnd w32.HWND) {
-			lastResized = 0 // cause edgeFuncTurn to be reset
-			if err := maximize(hwnd); err != nil {
-				fmt.Printf("warn: maximize: %v\n", err)
-				return
+		"edge_left":           func(hwnd w32.HWND) { cycleFuncs(hwnd, "edge_left", edgeFuncs[0]) },
+		"edge_right":          func(hwnd w32.HWND) { cycleFuncs(hwnd, "edge_right", edgeFuncs[1]) },
+		"edge_top":            func(hwnd w32.HWND) { cycleFuncs(hwnd, "edge_top", edgeFuncs[2]) },
+		"edge_bottom":         func(hwnd w32.HWND) { cycleFuncs(hwnd, "edge_bottom", edgeFuncs[3]) },
+		"third_left":          func(hwnd w32.HWND) { resizeDirect(hwnd, leftOneThirds) },
+		"third_middle_width":  func(hwnd w32.HWND) { resizeDirect(hwnd, middleWidthThird) },
+		"third_right":         func(hwnd w32.HWND) { resizeDirect(hwnd, rightOneThirds) },
+		"third_top":           func(hwnd w32.HWND) { resizeDirect(hwnd, topOneThirds) },
+		"third_middle_height": func(hwnd w32.HWND) { resizeDirect(hwnd, middleHeightThird) },
+		"third_bottom":        func(hwnd w32.HWND) { resizeDirect(hwnd, bottomOneThirds) },
+		"corner_top_left":     func(hwnd w32.HWND) { cycleFuncs(hwnd, "corner_top_left", cornerFuncs[0]) },
+		"corner_top_right":    func(hwnd w32.HWND) { cycleFuncs(hwnd, "corner_top_right", cornerFuncs[1]) },
+		"corner_bottom_left":  func(hwnd w32.HWND) { cycleFuncs(hwnd, "corner_bottom_left", cornerFuncs[2]) },
+		"corner_bottom_right": func(hwnd w32.HWND) { cycleFuncs(hwnd, "corner_bottom_right", cornerFuncs[3]) },
+		"maximize":            maximizeDirect,
+		"maximize_space":      maximizeDirect,
+		"todo": func(hwnd w32.HWND) {
+			lastCycleWindow = 0
+			if err := windows.toggleTodo(hwnd); err != nil {
+				showMessageBox(err.Error())
 			}
 		},
 		"center": func(hwnd w32.HWND) {
-			lastResized = 0 // cause edgeFuncTurn to be reset
-			if _, err := resize(hwnd, center); err != nil {
-				fmt.Printf("warn: resize: %v\n", err)
-				return
-			}
+			resizeDirect(hwnd, center)
 		},
 		"always_on_top": func(hwnd w32.HWND) {
 			if err := toggleAlwaysOnTop(hwnd); err != nil {
@@ -127,7 +139,7 @@ func main() {
 	}
 	defer stopKeyboardHook()
 
-	exitCh := make(chan os.Signal)
+	exitCh := make(chan os.Signal, 1)
 	signal.Notify(exitCh, os.Interrupt)
 	go func() {
 		<-exitCh
@@ -152,6 +164,12 @@ func showMessageBox(text string) {
 type resizeFunc func(disp, cur w32.RECT) w32.RECT
 
 func center(disp, cur w32.RECT) w32.RECT {
+	if cur.Width() > disp.Width() {
+		cur.Right = cur.Left + disp.Width()
+	}
+	if cur.Height() > disp.Height() {
+		cur.Bottom = cur.Top + disp.Height()
+	}
 	// TODO find a way to round up divisions consistently as it causes multiple runs to shift by 1px
 	w := (disp.Width() - cur.Width()) / 2
 	h := (disp.Height() - cur.Height()) / 2
@@ -163,17 +181,23 @@ func center(disp, cur w32.RECT) w32.RECT {
 }
 
 func resize(hwnd w32.HWND, f resizeFunc) (bool, error) {
+	return resizeInArea(hwnd, f, nil)
+}
+
+func resizeInArea(hwnd w32.HWND, f resizeFunc, area *w32.RECT) (bool, error) {
 	if !isZonableWindow(hwnd) {
 		fmt.Printf("warn: non-zonable window: %s\n", w32.GetWindowText(hwnd))
 		return false, nil
 	}
+	// ShowWindow returns the window's previous visibility, not whether this
+	// call succeeded. Restore first so measurements and frame offsets describe
+	// the normal window, even if the shortcut began from a maximized state.
+	w32.ShowWindow(hwnd, w32.SW_SHOWNORMAL)
 	rect := w32.GetWindowRect(hwnd)
-	mon := w32.MonitorFromWindow(hwnd, w32.MONITOR_DEFAULTTONEAREST)
-	hdc := w32.GetDC(hwnd)
-	displayDPI := w32.GetDeviceCaps(hdc, w32.LOGPIXELSY)
-	if !w32.ReleaseDC(hwnd, hdc) {
-		return false, fmt.Errorf("failed to ReleaseDC:%d", w32.GetLastError())
+	if rect == nil {
+		return false, fmt.Errorf("failed to GetWindowRect:%d", w32.GetLastError())
 	}
+	mon := w32.MonitorFromWindow(hwnd, w32.MONITOR_DEFAULTTONEAREST)
 	var monInfo w32.MONITORINFO
 	if !w32.GetMonitorInfo(mon, &monInfo) {
 		return false, fmt.Errorf("failed to GetMonitorInfo:%d", w32.GetLastError())
@@ -183,42 +207,36 @@ func resize(hwnd w32.HWND, f resizeFunc) (bool, error) {
 	if !ok {
 		return false, fmt.Errorf("failed to DwmGetWindowAttributeEXTENDED_FRAME_BOUNDS:%d", w32.GetLastError())
 	}
-	windowDPI := w32ex.GetDpiForWindow(hwnd)
-	resizedFrame := resizeForDpi(frame, int32(windowDPI), int32(displayDPI))
+	fmt.Printf("> window: 0x%x %#v (w:%d,h:%d) mon=0x%X\n", hwnd, rect, rect.Width(), rect.Height(), mon)
+	fmt.Printf("> DWM frame: %#v (W:%d,H:%d)\n", frame, frame.Width(), frame.Height())
 
-	fmt.Printf("> window: 0x%x %#v (w:%d,h:%d) mon=0x%X(@ display DPI:%d)\n", hwnd, rect, rect.Width(), rect.Height(), mon, displayDPI)
-	fmt.Printf("> DWM frame:        %#v (W:%d,H:%d) @ window DPI=%v\n", frame, frame.Width(), frame.Height(), windowDPI)
-	fmt.Printf("> DPI-less frame:   %#v (W:%d,H:%d)\n", resizedFrame, resizedFrame.Width(), resizedFrame.Height())
+	work := monInfo.RcWork
+	if area != nil {
+		work = *area
+	}
+	// DWM already returns physical pixels. Scaling its screen coordinates by
+	// the target app's DPI corrupts border sizes (and depends on its position).
+	target := f(work, frame)
+	newPos := windowBoundsForFrame(target, *rect, frame)
 
-	// calculate how many extra pixels go to win10 invisible borders
-	lExtra := resizedFrame.Left - rect.Left
-	rExtra := -resizedFrame.Right + rect.Right
-	tExtra := resizedFrame.Top - rect.Top
-	bExtra := -resizedFrame.Bottom + rect.Bottom
-
-	newPos := f(monInfo.RcWork, resizedFrame)
-
-	// adjust offsets based on invisible borders
-	newPos.Left -= lExtra
-	newPos.Top -= tExtra
-	newPos.Right += rExtra
-	newPos.Bottom += bExtra
-
-	lastResized = hwnd
 	if sameRect(rect, &newPos) {
 		fmt.Println("no resize")
 		return false, nil
 	}
 
 	fmt.Printf("> resizing to: %#v (W:%d,H:%d)\n", newPos, newPos.Width(), newPos.Height())
-	if !w32.ShowWindow(hwnd, w32.SW_SHOWNORMAL) { // normalize window first if it's set to SW_SHOWMAXIMIZE (and therefore stays maximized)
-		return false, fmt.Errorf("failed to normalize window ShowWindow:%d", w32.GetLastError())
-	}
 	if !w32.SetWindowPos(hwnd, 0, int(newPos.Left), int(newPos.Top), int(newPos.Width()), int(newPos.Height()), w32.SWP_NOZORDER|w32.SWP_NOACTIVATE) {
 		return false, fmt.Errorf("failed to SetWindowPos:%d", w32.GetLastError())
 	}
 	rect = w32.GetWindowRect(hwnd)
+	if rect == nil {
+		return false, fmt.Errorf("failed to GetWindowRect after resize:%d", w32.GetLastError())
+	}
 	fmt.Printf("> post-resize: %#v(W:%d,H:%d)\n", rect, rect.Width(), rect.Height())
+	if rect.Width() > newPos.Width() || rect.Height() > newPos.Height() {
+		fmt.Printf("warn: window is larger than requested: requested %dx%d, actual %dx%d; the app may enforce a minimum size\n",
+			newPos.Width(), newPos.Height(), rect.Width(), rect.Height())
+	}
 	return true, nil
 }
 
@@ -226,9 +244,7 @@ func maximize(hwnd w32.HWND) error {
 	if !isZonableWindow(hwnd) {
 		return errors.New("foreground window is not zonable")
 	}
-	if !w32.ShowWindow(hwnd, w32.SW_MAXIMIZE) {
-		return fmt.Errorf("failed to ShowWindow:%d", w32.GetLastError())
-	}
+	w32.ShowWindow(hwnd, w32.SW_MAXIMIZE)
 	return nil
 }
 
@@ -249,12 +265,14 @@ func toggleAlwaysOnTop(hwnd w32.HWND) error {
 	return nil
 }
 
-func resizeForDpi(src w32.RECT, from, to int32) w32.RECT {
+// windowBoundsForFrame expands a desired visible frame by the measured invisible
+// borders. All three rectangles must be in physical screen coordinates.
+func windowBoundsForFrame(target, window, frame w32.RECT) w32.RECT {
 	return w32.RECT{
-		Left:   src.Left * to / from,
-		Right:  src.Right * to / from,
-		Top:    src.Top * to / from,
-		Bottom: src.Bottom * to / from,
+		Left:   target.Left + window.Left - frame.Left,
+		Right:  target.Right + window.Right - frame.Right,
+		Top:    target.Top + window.Top - frame.Top,
+		Bottom: target.Bottom + window.Bottom - frame.Bottom,
 	}
 }
 
